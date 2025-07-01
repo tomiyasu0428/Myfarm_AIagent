@@ -1,6 +1,6 @@
 # Airtable Database Schema Summary
 
-このドキュメントは、あなたのAirtableベースのスキーマ（テーブル、フィールド、およびその型）をまとめたものです。
+_Last updated: 2025-07-01T22:17:03.527052Z_
 
 ---
 
@@ -11,9 +11,8 @@
 - **エリア**: singleSelect
 - **圃場名**: multilineText
 - **面積(ha)**: number
-- **メモ**: singleLineText
-- **作つけ計画**: singleLineText
 - **作付詳細**: multipleRecordLinks
+- **メモ**: singleLineText
 - **肥料管理**: singleLineText
 - **大豆作付計画**: singleLineText
 - **大豆播種管理**: singleLineText
@@ -94,6 +93,8 @@
 - **ステータス**: singleSelect
 - **予定日**: date
 - **実施日**: date
+- **使用資材**: multipleRecordLinks
+- **資材名 (from 使用資材)**: multipleLookupValues
 - **メモ**: aiText
 
 ---
@@ -111,6 +112,7 @@
 - **施用方法**: singleLineText
 - **保管場所**: singleLineText
 - **メモ**: multilineText
+- **作業タスク**: multipleRecordLinks
 
 ---
 
@@ -144,20 +146,6 @@
 
 ---
 
-## Table: 収穫ログ (ID: tblU8EUlRGyNK9blV)
-
-### Fields:
-- **収穫日**: date
-- **作物名**: singleLineText
-- **圃場名**: singleLineText
-- **サイズ**: singleSelect
-- **収穫量(kg)**: number
-- **単価(円/kg)**: currency
-- **売上**: number
-- **メモ**: multilineText
-
----
-
 ## Table: ナレッジベース (ID: tblYgwLKYh7XlK08z)
 
 ### Fields:
@@ -169,3 +157,16 @@
 
 ---
 
+## Table: 収穫ログ (ID: tblU8EUlRGyNK9blV)
+
+### Fields:
+- **収穫日**: date
+- **作物名**: singleLineText
+- **圃場名**: singleLineText
+- **サイズ**: singleSelect
+- **収穫量(個)**: number
+- **単価(円/個)**: currency
+- **売上**: number
+- **メモ**: multilineText
+
+---
