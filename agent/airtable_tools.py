@@ -2,6 +2,8 @@ import os
 import requests
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlencode
+from datetime import date
+from airtable import Airtable
 
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -15,17 +17,13 @@ except ModuleNotFoundError:  # pragma: no cover – optional dependency
 # Shared config helpers
 # ---------------------------------------------------------------------------
 
-_AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
+_AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY") or os.getenv("AIRTABLE_PAT")
 _AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
 
 if not _AIRTABLE_API_KEY:
-    raise EnvironmentError(
-        "AIRTABLE_API_KEY is not set. Add it to your environment or .env file."
-    )
+    raise EnvironmentError("AIRTABLE_API_KEY is not set. Add it to your environment or .env file.")
 if not _AIRTABLE_BASE_ID:
-    raise EnvironmentError(
-        "AIRTABLE_BASE_ID is not set. Add it to your environment or .env file."
-    )
+    raise EnvironmentError("AIRTABLE_BASE_ID is not set. Add it to your environment or .env file.")
 
 
 _HEADERS = {
@@ -42,20 +40,20 @@ class AirtableError(RuntimeError):
 # Internal request helpers
 # ---------------------------------------------------------------------------
 
+
 def _request_json(method: str, url: str, **kwargs) -> Dict[str, Any]:
     """Wrapper around requests.request that raises on errors and returns JSON."""
 
     resp = requests.request(method, url, headers=_HEADERS, timeout=30, **kwargs)
     if not resp.ok:
-        raise AirtableError(
-            f"Airtable API error {resp.status_code}: {resp.text}"
-        )
+        raise AirtableError(f"Airtable API error {resp.status_code}: {resp.text}")
     return resp.json()
 
 
 # ---------------------------------------------------------------------------
 # RECORD-LEVEL OPERATIONS
 # ---------------------------------------------------------------------------
+
 
 def airtable_get_records(
     table_name: str,
@@ -190,3 +188,68 @@ def airtable_delete_table(table_id: str) -> Dict[str, Any]:
     url = f"{_META_BASE}/{table_id}"
     _request_json("DELETE", url)
     return {"status": "success", "deleted_table_id": table_id}
+
+
+# Helper to get Airtable client
+
+
+def _get_table(table_name: str) -> Airtable:
+    return Airtable(_AIRTABLE_BASE_ID, table_name, api_key=_AIRTABLE_API_KEY)
+
+
+def get_today_tasks(worker_name: str) -> str:
+    """Returns today's tasks for the given worker (not completed)."""
+    try:
+        task_table = _get_table("作業タスク")
+        today = date.today().isoformat()
+        formula = (
+            f"AND(IS_SAME({{予定日}}, '{today}', 'day'), "
+            f"NOT({{ステータス}} = '完了'), "
+            f"FIND('{worker_name}', ARRAYJOIN({{担当者}})))"
+        )
+        tasks = task_table.get_all(formula=formula)
+        if not tasks:
+            return f"{worker_name}さんの本日のタスクはありません。"
+        task_list = []
+        for task in tasks:
+            fields = task.get("fields", {})
+            task_name = fields.get("タスク名", "N/A")
+            field_name = fields.get("圃場名 (from 圃場データ) (from 関連する作付計画)", ["N/A"])[0]
+            task_list.append(f"・{task_name} (圃場: {field_name})")
+        return f"{worker_name}さんの本日のタスク:\n" + "\n".join(task_list)
+    except Exception as e:
+        return f"タスクの取得中にエラーが発生しました: {e}"
+
+
+def get_field_info(field_name: str) -> str:
+    """Returns detailed info about a field (圃場)."""
+    try:
+        field_table = _get_table("圃場データ")
+        records = field_table.get_all(formula=f"{{圃場名}} = '{field_name}'")
+        if not records:
+            return f"圃場「{field_name}」が見つかりませんでした。"
+        field_record = records[0]["fields"]
+        info_parts = [f"圃場「{field_name}」の情報:"]
+        info_parts.append(f"- エリア: {field_record.get('エリア', 'N/A')}")
+        info_parts.append(f"- 面積: {field_record.get('面積(ha)', 'N/A')} ha")
+        if field_record.get("メモ"):
+            info_parts.append(f"- メモ: {field_record.get('メモ')}")
+        planting_plan_ids = field_record.get("作付詳細")
+        if planting_plan_ids:
+            info_parts.append("---")
+            info_parts.append("現在の作付計画:")
+            plan_table = _get_table("作付計画")
+            crop_table = _get_table("作物マスター")
+            for plan_id in planting_plan_ids:
+                plan_record = plan_table.get(plan_id)["fields"]
+                crop_name = "N/A"
+                if plan_record.get("作物マスター"):
+                    crop_id = plan_record.get("作物マスター")[0]
+                    crop_record = crop_table.get(crop_id)["fields"]
+                    crop_name = crop_record.get("作物名", "N/A")
+                plan_id_text = plan_record.get("ID", "N/A")
+                variety_name = plan_record.get("品種名", "N/A")
+                info_parts.append(f"- {plan_id_text}: {crop_name} ({variety_name})")
+        return "\n".join(info_parts)
+    except Exception as e:
+        return f"圃場情報の取得中にエラーが発生しました: {e}"
