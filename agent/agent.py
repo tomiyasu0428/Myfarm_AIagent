@@ -1,37 +1,37 @@
 from google.adk.agents import Agent
 
 from .airtable_tools import (
-    airtable_get_records,
-    airtable_create_record,
-    airtable_update_record,
-    airtable_delete_record,
-    airtable_create_table,
-    airtable_update_table,
-    airtable_delete_table,
+    create_daily_report,
+    get_field_info,
+    get_today_tasks,
+    search_materials,
+    update_task_status,
 )
 
 
 # NOTE: Adjust the model name if you have access to a different Gemini tier.
-_MODEL_NAME = "gemini-2.0-flash"
+_MODEL_NAME = "gemini-1.5-flash"
 
 
 root_agent = Agent(
     model=_MODEL_NAME,
-    name="agri_airtable_agent",
-    description="An AI agent capable of managing Airtable tables and records for the Agri-Agent project.",
+    name="agri_agent",
+    description="農作業に関するタスク管理、日報作成、情報検索を行うためのAIアシスタントです。",
     instruction=(
-        "You are an assistant designed to operate on Airtable. "
-        "Use the provided tools to read from tables, insert new rows, update existing rows, "
-        "and create or delete entire tables. When unsure about table or field names, "
-        "ask the user for clarification before running a destructive operation."
+        "あなたは熟練の農業アシスタントです。"
+        "ユーザーからの自然言語による指示を理解し、提供されたツールを使って以下の操作を行ってください。\n"
+        "- 今日の作業タスクを確認する (get_today_tasks)\n"
+        "- 作業日報を記録する (create_daily_report)\n"
+        "- 作業タスクの状況を更新する (update_task_status)\n"
+        "- 圃場の情報を調べる (get_field_info)\n"
+        "- 農薬や肥料などの資材を検索する (search_materials)\n"
+        "特にタスク更新の際は、まずタスクを取得してから更新対象を特定するなど、複数のツールを段階的に使用して目的を達成してください。"
     ),
     tools=[
-        airtable_get_records,
-        airtable_create_record,
-        airtable_update_record,
-        airtable_delete_record,
-        airtable_create_table,
-        airtable_update_table,
-        airtable_delete_table,
+        get_today_tasks,
+        create_daily_report,
+        update_task_status,
+        get_field_info,
+        search_materials,
     ],
 )
