@@ -288,7 +288,16 @@ def update_task_status(record_id: str, status: str) -> str:
         return f"予期せぬエラーが発生しました: {e}"
 
 
-def search_materials(query: str, category: Optional[str] = None, crop: Optional[str] = None) -> str:
+def _sanitize_airtable_string(value: str) -> str:
+    """Sanitize string for use in Airtable formulas to prevent injection."""
+    return value.replace("'", "\\'").replace('"', '\\"')
+
+
+def search_materials(
+    query: str,
+    category: Optional[str] = None,
+    crop: Optional[str] = None,
+) -> str:
     """資材マスターテーブルから、指定された条件で資材を検索する。
 
     Args:
@@ -304,20 +313,26 @@ def search_materials(query: str, category: Optional[str] = None, crop: Optional[
 
         # フィルタ式を動的に構築
         formulas = []
-        if query:
+        sanitized_query = _sanitize_airtable_string(query)
+        if sanitized_query:
             # 複数のフィールドをORで検索
             or_clauses = [
-                f"FIND('{query}', {{資材名}})",
-                f"FIND('{query}', {{主成分}})",
-                f"FIND('{query}', {{メーカー}})",
+                f"FIND('{sanitized_query}', {{資材名}})",
+                f"FIND('{sanitized_query}', {{主成分}})",
+                f"FIND('{sanitized_query}', {{メーカー}})",
             ]
             formulas.append(f"OR({', '.join(or_clauses)})")
 
         if category:
-            formulas.append(f"{{資材分類}} = '{category}'")
+            sanitized_category = _sanitize_airtable_string(category)
+            formulas.append(f"{{資材分類}} = '{sanitized_category}'")
 
         if crop:
-            formulas.append(f"FIND('{crop}', {{適用作物}})")
+            sanitized_crop = _sanitize_airtable_string(crop)
+            formulas.append(f"FIND('{sanitized_crop}', {{適用作物}})")
+
+        if not formulas:
+            return "検索条件が指定されていません。"
 
         filter_formula = f"AND({', '.join(formulas)})"
 
@@ -331,12 +346,12 @@ def search_materials(query: str, category: Optional[str] = None, crop: Optional[
             fields = record["fields"]
             info = (
                 f"- {fields.get('資材名', 'N/A')} "
-                f"({fields.get('メーカー', 'N/A')}, {fields.get('規格・容量', 'N/A')})\n"
-                f"  分類: {fields.get('資材分類', 'N/A')}\n"
+                f"({fields.get('メーカー', 'N/A')}, {fields.get('規格・容量', 'N/A')})\\n"
+                f"  分類: {fields.get('資材分類', 'N/A')}\\n"
                 f"  適用作物: {fields.get('適用作物', 'N/A')}"
             )
             results.append(info)
 
-        return "\n".join(results)
+        return "\\n".join(results)
     except Exception as e:
         return f"エラー: 資材の検索中に予期せぬ問題が発生しました - {e}"
