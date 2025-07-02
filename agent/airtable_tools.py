@@ -184,14 +184,27 @@ def airtable_update_table(
 
 
 def airtable_delete_table(table_id: str) -> Dict[str, Any]:
-    """Deletes (permanently) a table from the base."""
+    """
+    Permanently deletes a table from the Airtable base by its table ID.
+    
+    Parameters:
+        table_id (str): The internal Airtable table ID to delete.
+    
+    Returns:
+        dict: A dictionary with the status and the deleted table ID.
+    """
     url = f"{_META_BASE}/{table_id}"
     _request_json("DELETE", url)
     return {"status": "success", "deleted_table_id": table_id}
 
 
 def airtable_list_tables() -> Dict[str, Any]:
-    """Lists all tables in the base with their schema."""
+    """
+    Retrieve a list of all tables in the Airtable base along with their schema details.
+    
+    Returns:
+        dict: A dictionary containing the status and a list of tables with their schema information.
+    """
     data = _request_json("GET", _META_BASE)
     return {"status": "success", "tables": data.get("tables", [])}
 
@@ -228,7 +241,15 @@ def get_today_tasks(worker_name: str) -> str:
 
 
 def get_field_info(field_name: str) -> str:
-    """圃場名（`作業場所`）を指定して、関連する作付け情報や土壌データを取得する。"""
+    """
+    Retrieve cultivation and soil information for a specified field name from the "圃場マスタ" table.
+    
+    Parameters:
+        field_name (str): The name of the field ("作業場所") to look up.
+    
+    Returns:
+        str: A formatted string with the field's information if found, a not-found message if no matching record exists, or an error message if retrieval fails.
+    """
     try:
         table = _get_table("圃場マスタ")
         records = table.get_all(formula=f"{{作業場所}} = '{field_name}'")
@@ -241,14 +262,15 @@ def get_field_info(field_name: str) -> str:
 
 
 def create_daily_report(reporter_name: str, content: str) -> str:
-    """LINEからの報告を日報ログテーブルに新規作成する。
-
-    Args:
-        reporter_name: 報告者の名前。
-        content: 報告内容のテキスト。
-
+    """
+    Creates a new daily report record in the "日報ログ" table with the current date, reporter name, and content.
+    
+    Parameters:
+        reporter_name (str): Name of the person submitting the report.
+        content (str): Text content of the report.
+    
     Returns:
-        処理結果を示すメッセージ文字列。
+        str: A message indicating the result of the operation, including the new record ID on success or an error message on failure.
     """
     try:
         today_str = date.today().isoformat()
@@ -267,14 +289,15 @@ def create_daily_report(reporter_name: str, content: str) -> str:
 
 
 def update_task_status(record_id: str, status: str) -> str:
-    """作業タスクのステータスを更新する。
-
-    Args:
-        record_id: 更新対象の作業タスクのレコードID。
-        status: 新しいステータス（例: "完了", "保留"）。
-
+    """
+    Update the status of a task record in the "作業タスク" table by record ID.
+    
+    Parameters:
+        record_id (str): The Airtable record ID of the task to update.
+        status (str): The new status value to set (e.g., "完了", "保留").
+    
     Returns:
-        処理結果を示すメッセージ文字列。
+        str: A message indicating the result of the update operation, or an error message if the update fails.
     """
     try:
         # "作業タスク" テーブルの "ステータス" フィールドを更新
@@ -289,15 +312,16 @@ def update_task_status(record_id: str, status: str) -> str:
 
 
 def search_materials(query: str, category: Optional[str] = None, crop: Optional[str] = None) -> str:
-    """資材マスターテーブルから、指定された条件で資材を検索する。
-
-    Args:
-        query: 検索キーワード。資材名や主成分などを対象に部分一致で検索する。
-        category: "農薬", "肥料" などの資材分類で絞り込む（任意）。
-        crop: 適用作物名で絞り込む（任意）。
-
+    """
+    Searches the "資材マスター" (Materials Master) table for materials matching a query string, with optional filters for category and applicable crop.
+    
+    Parameters:
+        query (str): Keyword to search for in material name, main ingredient, or manufacturer fields.
+        category (Optional[str]): Material category (e.g., "農薬", "肥料") to filter results (optional).
+        crop (Optional[str]): Crop name to filter materials by applicable crops (optional).
+    
     Returns:
-        検索結果のリスト、または見つからなかった場合のメッセージ。
+        str: A formatted list of matching materials, or a message if no matches are found or an error occurs.
     """
     try:
         table = _get_table("資材マスター")
