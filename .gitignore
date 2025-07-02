@@ -63,4 +63,8 @@ venv.bak/
 *.tmp
 
 # System files
-.DS_Store 
+.DS_Store
+
+# GCP/Firebase
+service-account-key.json
+firebase-adminsdk.json 
