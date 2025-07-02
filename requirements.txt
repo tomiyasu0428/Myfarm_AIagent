@@ -1,0 +1,8 @@
+# Google Agents SDK (ADK) – provides google.adk.* modules for agent framework
+google-adk>=0.4.0
+
+# HTTP client for Airtable API
+requests>=2.31.0
+
+# Optional: load environment variables from .env
+python-dotenv>=1.0.0
