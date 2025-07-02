@@ -10,7 +10,7 @@ from .airtable_tools import (
 
 
 # NOTE: Adjust the model name if you have access to a different Gemini tier.
-_MODEL_NAME = "gemini-1.5-flash"
+_MODEL_NAME = "gemini-2.5-pro"
 
 
 root_agent = Agent(

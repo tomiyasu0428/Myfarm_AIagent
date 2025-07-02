@@ -203,26 +203,48 @@ def _get_table(table_name: str) -> Airtable:
     return Airtable(_AIRTABLE_BASE_ID, table_name, api_key=_AIRTABLE_API_KEY)
 
 
-def get_today_tasks(worker_name: str) -> str:
-    """Returns today's tasks for the given worker (not completed)."""
+def get_today_tasks(worker_name: Optional[str] = None) -> str:
+    """今日予定の作業タスクを取得します。
+
+    Args:
+        worker_name: 担当者名。省略した場合は担当者で絞り込みません。
+    """
     try:
         task_table = _get_table("作業タスク")
         today = date.today().isoformat()
-        formula = (
-            f"AND(IS_SAME({{予定日}}, '{today}', 'day'), "
-            f"NOT({{ステータス}} = '完了'), "
-            f"FIND('{worker_name}', ARRAYJOIN({{担当者}})))"
-        )
-        tasks = task_table.get_all(formula=formula)
+
+        # --- フィルタ式を動的に組み立て ---
+        filters = [f"IS_SAME({{予定日}}, '{today}', 'day')", "NOT({ステータス} = '完了')"]
+
+        # 担当者による絞り込みはオプション
+        if worker_name:
+            sanitized_name = _sanitize_airtable_string(worker_name)
+            # 担当者フィールドが存在しない環境ではこの条件を追加しない
+            filters.append(f"FIND('{sanitized_name}', ARRAYJOIN({{担当者}}))")
+
+        filter_formula = "AND(" + ", ".join(filters) + ")"
+
+        tasks = task_table.get_all(formula=filter_formula)
+
         if not tasks:
-            return f"{worker_name}さんの本日のタスクはありません。"
-        task_list = []
+            if worker_name:
+                return f"{worker_name}さんの本日のタスクはありません。"
+            return "本日のタスクはありません。"
+
+        task_list: list[str] = []
         for task in tasks:
             fields = task.get("fields", {})
             task_name = fields.get("タスク名", "N/A")
-            field_name = fields.get("圃場名 (from 圃場データ) (from 関連する作付計画)", ["N/A"])[0]
+            # 圃場名フィールドはルックアップのため配列で返ることがある
+            field_val = fields.get("圃場名 (from 圃場データ) (from 関連する作付計画)")
+            if isinstance(field_val, list):
+                field_name = field_val[0] if field_val else "N/A"
+            else:
+                field_name = field_val or "N/A"
             task_list.append(f"・{task_name} (圃場: {field_name})")
-        return f"{worker_name}さんの本日のタスク:\n" + "\n".join(task_list)
+
+        header = f"{worker_name}さんの本日のタスク:" if worker_name else "本日のタスク:"
+        return header + "\n" + "\n".join(task_list)
     except Exception as e:
         return f"タスクの取得中にエラーが発生しました: {e}"
 
@@ -355,3 +377,73 @@ def search_materials(
         return "\\n".join(results)
     except Exception as e:
         return f"エラー: 資材の検索中に予期せぬ問題が発生しました - {e}"
+
+
+def search_tasks(
+    task_keyword: str,
+    month: Optional[str] = None,
+    field_name: Optional[str] = None,
+) -> str:
+    """複数条件で作業タスクを検索する。
+
+    Args:
+        task_keyword: タスク名に含まれるキーワード（例: "防除"）
+        month: 対象月。"2025-07" 形式または "7月" などを許容。省略可。
+        field_name: 圃場名で絞り込む場合に指定。
+
+    Returns:
+        ヒットしたタスク一覧または見つからない旨のメッセージ。
+    """
+    try:
+        table = _get_table("作業タスク")
+
+        if not task_keyword:
+            return "検索キーワードが指定されていません。"
+
+        formulas: list[str] = []
+        sanitized_kw = _sanitize_airtable_string(task_keyword)
+        formulas.append(f"FIND('{sanitized_kw}', {{タスク名}})")
+
+        # 月指定がある場合 → 予定日の YYYY-MM で一致を取る
+        if month:
+            # "7月" → "07", "2025-07" はそのまま
+            import re
+
+            if re.match(r"^\d{4}-\d{2}$", month):
+                ym_str = month
+            else:
+                digits = re.sub(r"\D", "", month)
+                if len(digits) == 1:
+                    digits = f"0{digits}"
+                # 年未指定 → 当年
+                ym_str = f"{date.today().year}-{digits}"
+            ym_safe = _sanitize_airtable_string(ym_str)
+            formulas.append(f"SEARCH('{ym_safe}', DATETIME_FORMAT({{予定日}}, 'YYYY-MM'))")
+
+        if field_name:
+            fname = _sanitize_airtable_string(field_name)
+            formulas.append(
+                f"FIND('{fname}', ARRAYJOIN({{圃場名 (from 圃場データ) (from 関連する作付計画)}}))"
+            )
+
+        filter_formula = "AND(" + ", ".join(formulas) + ")"
+        records = table.get_all(formula=filter_formula)
+
+        if not records:
+            return "条件に合うタスクは見つかりませんでした。"
+
+        lines: list[str] = [f"条件に合うタスクが {len(records)} 件見つかりました:"]
+        for rec in records:
+            flds = rec["fields"]
+            tname = flds.get("タスク名", "N/A")
+            sched = flds.get("予定日", "N/A")
+            fld_val = flds.get("圃場名 (from 圃場データ) (from 関連する作付計画)")
+            if isinstance(fld_val, list):
+                fld_disp = fld_val[0] if fld_val else "N/A"
+            else:
+                fld_disp = fld_val or "N/A"
+            lines.append(f"・{sched}: {tname} (圃場: {fld_disp})")
+
+        return "\n".join(lines)
+    except Exception as e:
+        return f"エラー: タスク検索中に問題が発生しました - {e}"
